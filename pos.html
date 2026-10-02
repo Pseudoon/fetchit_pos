@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fetchit POS</title>
+<style>
+  :root {
+    --bg: #eaf5fb; --card: #ffffff; --ink: #3a1c12; --muted: #7a6a5c;
+    --accent: #4a2318; --accent-dark: #2e150d; --border: #e6ded0; --green: #4a2318;
+    --cream: #f3e6c0; --sky: #a9d8ec;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; background: var(--bg); color: var(--ink); }
+  header { background: var(--accent); color: var(--cream); padding: 10px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom: 4px solid var(--cream); }
+  header .brand { display:flex; align-items:center; gap:10px; }
+  header h1 { font-size: 18px; margin:0; color: var(--cream); letter-spacing:.02em; }
+  .tabs { display:flex; gap:8px; }
+  .tabs button { background: rgba(255,255,255,0.12); border: 1px solid rgba(243,230,192,0.4); color: var(--cream); padding:6px 14px; border-radius:6px; cursor:pointer; font-size:13px; }
+  .tabs button.active { background: var(--cream); color: var(--accent); font-weight:700; border-color: var(--cream); }
+  main { display:none; padding: 16px; gap:16px; max-width: 1400px; margin:0 auto; }
+  main.active { display:flex; }
+  .col { background: var(--card); border-radius:10px; padding:14px; border:1px solid var(--border); }
+  #pos-view { align-items: flex-start; }
+  
+  /* 3-Column Layout */
+  #menu-col { flex: 2; }
+  #cart-col { flex: 1.2; min-width: 300px; position: sticky; top: 16px; }
+  #active-col { flex: 1.2; min-width: 300px; position: sticky; top: 16px; background: var(--cream); border-color: #d8cdb0; }
+  
+  .category-title { font-size:15px; font-weight:700; margin: 14px 0 6px; color: var(--accent); }
+  .subcategory-title { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color: var(--muted); margin: 8px 0 4px; }
+  .item-row { display:flex; justify-content:space-between; align-items:center; padding:8px 6px; border-bottom:1px solid var(--border); font-size:14px; }
+  .item-name { flex:1; }
+  .variant-btn { background: var(--sky); border:1px solid var(--border); color: var(--accent); padding:5px 10px; border-radius:6px; margin-left:6px; cursor:pointer; font-size:13px; font-weight:600; }
+  .variant-btn:hover { background: var(--accent); color: var(--cream); border-color: var(--accent); }
+  
+  .cart-item { display:flex; justify-content:space-between; align-items:center; padding:7px 0; font-size:14px; border-bottom:1px solid var(--border); }
+  .cart-item button { background:none; border:none; color:#c0392b; cursor:pointer; font-size:16px; padding:0 4px; }
+  .qty-controls { display:flex; align-items:center; gap:6px; }
+  .qty-controls button { width:22px; height:22px; border-radius:4px; border:1px solid var(--border); background:#fff; cursor:pointer; }
+  
+  input[type=text], input[type=tel], select { width:100%; padding:8px; border:1px solid var(--border); border-radius:6px; margin-bottom:10px; font-size:14px; }
+  label { font-size:12px; color: var(--muted); display:block; margin-bottom:3px; }
+  .totals-row { display:flex; justify-content:space-between; font-size:14px; padding:4px 0; }
+  .totals-row.grand { font-weight:700; font-size:16px; border-top:1px solid var(--border); margin-top:6px; padding-top:8px; }
+  
+  #stage-order-btn { width:100%; background: var(--accent); color: var(--cream); border:none; padding:12px; border-radius:8px; font-size:15px; font-weight:700; cursor:pointer; margin-top:10px; }
+  #stage-order-btn:disabled { background:#b8ab98; cursor:not-allowed; }
+  .empty-cart { color: var(--muted); font-size:13px; padding: 10px 0; text-align:center;}
+  
+  /* Ticket Cards CSS */
+  .ticket-card { background: #fff; border: 1px solid var(--accent); border-radius: 8px; padding: 12px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+  .ticket-card h4 { margin: 0 0 4px 0; color: var(--accent); font-size: 15px;}
+  .ticket-card .ticket-meta { font-size: 11px; color: var(--muted); margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px dashed var(--border); }
+  .ticket-card .ticket-items { font-size: 13px; margin-bottom: 8px; line-height: 1.4; }
+  .ticket-card .ticket-total { font-weight: bold; font-size: 15px; color: var(--accent); margin-bottom: 10px; }
+  .ticket-card .pay-btn { background: #27ae60; color: #fff; border: none; padding: 8px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; font-size: 14px; }
+  .ticket-card .pay-btn:hover { background: #219653; }
+  .ticket-card .pay-btn:disabled { background: #95a5a6; cursor: not-allowed; }
+  .ticket-card .delete-btn { background: none; color: #e74c3c; border: none; font-size: 12px; cursor: pointer; padding: 0; float: right; text-decoration: underline;}
+
+  .bill-modal-bg { display:none; position:fixed; inset:0; background:rgba(58,28,18,.55); align-items:center; justify-content:center; z-index:50; }
+  .bill-modal-bg.active { display:flex; }
+  .bill-modal { background:#fff; border-radius:10px; padding:22px; width:320px; max-width:90vw; border-top: 6px solid var(--accent); text-align:center;}
+  .bill-modal h2 { margin-top:0; font-size:16px; color: var(--accent); }
+  .order-id-badge { background: var(--cream); color: var(--accent); padding:4px 10px; border-radius:6px; font-weight:700; font-size:14px; display:inline-block; margin-bottom:10px; }
+  .bill-modal button { margin-top:14px; width:100%; padding:10px; border:none; background: var(--accent); color: var(--cream); border-radius:6px; cursor:pointer; font-weight:700; }
+  
+  #orders-view { flex-direction: column; }
+  #orders-view .col { width: 100%; }
+  .summary-cards { display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap; }
+  .summary-card { background: var(--card); border:1px solid var(--border); border-radius:10px; padding:14px 18px; flex: 1; min-width: 150px;}
+  .summary-card .label { font-size:12px; color:var(--muted); }
+  .summary-card .value { font-size:20px; font-weight:700; margin-top:2px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:12px 6px; border-bottom:1px solid var(--border); }
+  th { color: var(--muted); font-weight:600; font-size:12px; text-transform:uppercase; }
+  .controls-bar { display: flex; gap: 10px; margin-bottom: 15px; align-items: center; flex-wrap: wrap;}
+  .refresh-btn { padding:8px 12px; border-radius:6px; border:1px solid var(--border); background:#fff; cursor:pointer; font-weight: 600;}
+  .refresh-btn:hover { background: var(--cream); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Fetchit POS</h1>
+  </div>
+  <div class="tabs">
+    <button id="tab-pos" class="active" onclick="switchTab('pos')">Terminal</button>
+    <button id="tab-orders" onclick="switchTab('orders'); fetchDashboardData();">Daily Records</button>
+  </div>
+</header>
+
+<!-- POS TERMINAL VIEW -->
+<main id="pos-view" class="active">
+  
+  <!-- Column 1: Menu -->
+  <div id="menu-col" class="col">
+    <!-- Menu items injected here -->
+  </div>
+
+  <!-- Column 2: Cart -->
+  <div id="cart-col" class="col">
+    <div style="margin-bottom: 15px;">
+      <label>Customer Name</label>
+      <input type="text" id="cust-name" placeholder="Enter name">
+      
+      <label>Phone Number</label>
+      <input type="tel" id="cust-phone" placeholder="Enter 10-digit phone" maxlength="10" oninput="this.value = this.value.replace(/[^0-9]/g, '')">
+      
+      <label>Delivery Spot</label>
+      <select id="delivery-spot">
+        <option value="Hostel Circle">Hostel Circle</option>
+        <option value="Admin Circle">Admin Circle</option>
+      </select>
+
+      <label>Time Slot</label>
+      <select id="time-slot">
+        <option value="7:00 PM – 8:00 PM">7:00 PM – 8:00 PM</option>
+        <option value="10:00 PM – 11:00 PM">10:00 PM – 11:00 PM</option>
+      </select>
+    </div>
+
+    <div style="border-top: 1px solid var(--border); padding-top: 10px; margin-bottom: 10px;">
+        <strong>Current Cart</strong>
+    </div>
+
+    <div id="cart-items">
+      <div class="empty-cart">Cart is empty</div>
+    </div>
+
+    <div style="margin-top: 15px;">
+      <div class="totals-row">
+        <span>Subtotal</span>
+        <span id="cart-subtotal">Rs. 0</span>
+      </div>
+      <div class="totals-row">
+        <span>Delivery</span>
+        <span id="cart-delivery">Rs. 0</span>
+      </div>
+      <div class="totals-row grand">
+        <span>Total</span>
+        <span id="cart-total">Rs. 0</span>
+      </div>
+    </div>
+
+    <button id="stage-order-btn" onclick="stageOrder()" disabled>Save Unpaid Ticket</button>
+  </div>
+
+  <!-- Column 3: Active/Unpaid Tickets -->
+  <div id="active-col" class="col">
+    <h3 style="margin-top: 0; margin-bottom: 15px; color: var(--accent); border-bottom: 2px solid var(--accent); padding-bottom: 8px;">
+      Unpaid Tickets (<span id="ticket-count">0</span>)
+    </h3>
+    <div id="active-tickets-container">
+      <div class="empty-cart">No unpaid tickets.</div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ORDERS DASHBOARD VIEW -->
+<main id="orders-view">
+  <div class="controls-bar">
+    <input type="date" id="date-picker">
+    <select id="filter-time-slot" style="width:auto; margin-bottom:0;">
+        <option value="">All Time Slots</option>
+        <option value="7:00 PM – 8:00 PM">7:00 PM – 8:00 PM</option>
+        <option value="10:00 PM – 11:00 PM">10:00 PM – 11:00 PM</option>
+    </select>
+    <button class="refresh-btn" onclick="fetchDashboardData()">Refresh Data</button>
+    <div style="flex: 1;"></div>
+    <button class="refresh-btn" onclick="downloadPDF('daily-pdf')">⬇ Daily Report</button>
+    <button class="refresh-btn" onclick="downloadPDF('customer-list-pdf')">⬇ Customer List</button>
+    <button class="refresh-btn" onclick="downloadPDF('tally-chinese-pdf')">⬇ Chinese Tally</button>
+    <button class="refresh-btn" onclick="downloadPDF('tally-fastfood-pdf')">⬇ Fast Food Tally</button>
+    <button class="refresh-btn" onclick="downloadPDF('tally-momos-pdf')">⬇ Momos Tally</button>
+    <button class="refresh-btn" onclick="downloadPDF('tally-rest-pdf')">⬇ South Indian Tally</button>
+  </div>
+
+  <div class="summary-cards">
+    <div class="summary-card">
+      <div class="label">Total Orders</div>
+      <div class="value" id="sum-orders">0</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Items Revenue</div>
+      <div class="value" id="sum-subtotal">Rs. 0</div>
+    </div>
+    <div class="summary-card">
+      <div class="label">Delivery Fees</div>
+      <div class="value" id="sum-delivery">Rs. 0</div>
+    </div>
+    <div class="summary-card" style="background-color: var(--cream);">
+      <div class="label" style="color: var(--accent);">Total Revenue</div>
+      <div class="value" id="sum-total" style="color: var(--accent);">Rs. 0</div>
+    </div>
+  </div>
+
+  <div class="col">
+    <table>
+      <thead>
+        <tr>
+          <th>Order #</th>
+          <th>Customer</th>
+          <th>Spot</th>
+          <th>Time Slot</th>
+          <th>Items</th>
+          <th>Total</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="orders-table-body">
+        <tr><td colspan="7" style="text-align:center; padding: 20px; color: var(--muted);">Loading orders...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<!-- Success Modal -->
+<div class="bill-modal-bg" id="success-modal">
+  <div class="bill-modal">
+    <h2>Payment Received & Order Placed!</h2>
+    <div class="order-id-badge" id="modal-order-id">Order #--</div>
+    <div style="font-size: 14px; margin-bottom: 5px;">Total amount collected:</div>
+    <div style="font-size: 24px; font-weight: bold; color: var(--accent);" id="modal-total">Rs. 0</div>
+    <button onclick="closeModal()">Close</button>
+  </div>
+</div>
+
+<!-- Edit Order Modal -->
+<div class="bill-modal-bg" id="edit-modal">
+  <div class="bill-modal" style="width:420px; text-align:left;">
+    <h2 style="text-align:center;">Edit Order #<span id="edit-order-num"></span></h2>
+    <label>Customer Name</label>
+    <input type="text" id="edit-name">
+    <label>Phone Number</label>
+    <input type="tel" id="edit-phone" maxlength="10" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+    <label>Delivery Spot</label>
+    <select id="edit-spot">
+      <option value="Hostel Circle">Hostel Circle</option>
+      <option value="Admin Circle">Admin Circle</option>
+    </select>
+    <label>Time Slot</label>
+    <select id="edit-timeslot">
+      <option value="7:00 PM – 8:00 PM">7:00 PM – 8:00 PM</option>
+      <option value="10:00 PM – 11:00 PM">10:00 PM – 11:00 PM</option>
+    </select>
+
+    <label>Items</label>
+    <div id="edit-items-list" style="margin-bottom:8px;"></div>
+
+    <div style="display:flex; gap:6px; margin-bottom:12px;">
+      <select id="edit-add-item-select" style="flex:1; margin-bottom:0;"></select>
+      <button class="refresh-btn" onclick="addEditItem()">+ Add</button>
+    </div>
+
+    <button onclick="saveEditOrder()">Save Changes</button>
+    <button style="background:var(--bg); color:var(--ink); border:1px solid var(--border); margin-top:8px;" onclick="closeEditModal()">Cancel</button>
+  </div>
+</div>
+
+<script>
+  // CHANGE THIS TO YOUR BACKEND URL
+  // When pos.html is served BY the FastAPI app itself (recommended — see below),
+  // this automatically points at whatever domain the page is loaded from.
+  // Only hardcode a URL here if you're opening this file separately from the backend.
+  const API_BASE = window.location.origin.includes("localhost") && window.location.protocol === "file:"
+    ? "http://localhost:8000"
+    : window.location.origin;
+  const DELIVERY_CHARGE = 20.0;
+  
+  let cart = [];
+  let activeTickets = []; // Staged unpaid orders
+  let loadedMenu = [];    // flat menu cache, reused by the edit-order modal
+  let currentOrders = []; // last fetched orders for the Daily Records table
+  let editingOrder = null; // { order_date, daily_number }
+  let editCart = [];
+
+  // Initialize
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('date-picker').valueAsDate = new Date();
+    loadMenu();
+    renderActiveTickets();
+  });
+
+  function switchTab(tab) {
+    document.getElementById('pos-view').classList.remove('active');
+    document.getElementById('orders-view').classList.remove('active');
+    document.getElementById('tab-pos').classList.remove('active');
+    document.getElementById('tab-orders').classList.remove('active');
+    
+    document.getElementById(`${tab}-view`).classList.add('active');
+    document.getElementById(`tab-${tab}`).classList.add('active');
+  }
+
+  // --- MENU & CART LOGIC ---
+  async function loadMenu() {
+    try {
+      const res = await fetch(`${API_BASE}/menu/`);
+      const menuData = await res.json();
+      loadedMenu = menuData;
+      const menuCol = document.getElementById('menu-col');
+      menuCol.innerHTML = '';
+
+      menuData.forEach(category => {
+        const catTitle = document.createElement('div');
+        catTitle.className = 'category-title';
+        catTitle.innerText = `${category.category} - ${category.subcategory}`;
+        menuCol.appendChild(catTitle);
+
+        category.items.forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'item-row';
+          
+          let btnHTML = '';
+          item.variants.forEach(v => {
+            const displayName = v.label === "Regular" ? item.name : `${item.name} (${v.label})`;
+            btnHTML += `<button class="variant-btn" onclick="addToCart('${displayName}', ${v.price})">${v.label} - Rs.${v.price}</button>`;
+          });
+
+          row.innerHTML = `<div class="item-name">${item.name}</div><div>${btnHTML}</div>`;
+          menuCol.appendChild(row);
+        });
+      });
+    } catch (err) {
+      document.getElementById('menu-col').innerHTML = '<div style="color:red;">Error loading menu. Is the backend running?</div>';
+    }
+  }
+
+  function addToCart(name, price) {
+    const existing = cart.find(i => i.name === name);
+    if (existing) {
+      existing.qty++;
+    } else {
+      cart.push({ name, price, qty: 1 });
+    }
+    renderCart();
+  }
+
+  function updateQty(name, delta) {
+    const item = cart.find(i => i.name === name);
+    if (!item) return;
+    item.qty += delta;
+    if (item.qty <= 0) {
+      cart = cart.filter(i => i.name !== name);
+    }
+    renderCart();
+  }
+
+  function renderCart() {
+    const container = document.getElementById('cart-items');
+    const btn = document.getElementById('stage-order-btn');
+    
+    if (cart.length === 0) {
+      container.innerHTML = '<div class="empty-cart">Cart is empty</div>';
+      document.getElementById('cart-subtotal').innerText = 'Rs. 0';
+      document.getElementById('cart-delivery').innerText = 'Rs. 0';
+      document.getElementById('cart-total').innerText = 'Rs. 0';
+      btn.disabled = true;
+      return;
+    }
+
+    btn.disabled = false;
+    container.innerHTML = '';
+    let subtotal = 0;
+
+    cart.forEach(item => {
+      subtotal += item.price * item.qty;
+      const el = document.createElement('div');
+      el.className = 'cart-item';
+      el.innerHTML = `
+        <div style="flex:1;">
+          <div>${item.name}</div>
+          <div style="font-size:12px; color:var(--muted);">Rs. ${item.price} x ${item.qty}</div>
+        </div>
+        <div class="qty-controls">
+          <button onclick="updateQty('${item.name}', -1)">-</button>
+          <span style="width:20px; text-align:center;">${item.qty}</span>
+          <button onclick="updateQty('${item.name}', 1)">+</button>
+        </div>
+      `;
+      container.appendChild(el);
+    });
+
+    document.getElementById('cart-subtotal').innerText = `Rs. ${subtotal}`;
+    document.getElementById('cart-delivery').innerText = `Rs. ${DELIVERY_CHARGE}`;
+    document.getElementById('cart-total').innerText = `Rs. ${subtotal + DELIVERY_CHARGE}`;
+  }
+
+  // --- STAGING & PAYMENT LOGIC ---
+
+  function stageOrder() {
+    const name = document.getElementById('cust-name').value.trim();
+    const phone = document.getElementById('cust-phone').value.trim();
+    const spot = document.getElementById('delivery-spot').value;
+    const timeSlot = document.getElementById('time-slot').value;
+
+    if (!name || phone.length !== 10) {
+      alert("Please enter a valid customer name and a 10-digit phone number.");
+      return;
+    }
+
+    // Create a temporary ticket object
+    const subtotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+    const ticket = {
+      id: Date.now(), // Temporary internal ID for UI tracking
+      customer_name: name,
+      customer_phone: phone,
+      delivery_spot: spot,
+      time_slot: timeSlot,
+      items: cart.map(i => ({ item_name: i.name, quantity: i.qty, price: i.price })),
+      total: subtotal + DELIVERY_CHARGE
+    };
+
+    // Push to active tickets and render
+    activeTickets.push(ticket);
+    renderActiveTickets();
+
+    // Clear Cart Form
+    cart = [];
+    document.getElementById('cust-name').value = '';
+    document.getElementById('cust-phone').value = '';
+    renderCart();
+  }
+
+  function renderActiveTickets() {
+    const container = document.getElementById('active-tickets-container');
+    document.getElementById('ticket-count').innerText = activeTickets.length;
+    
+    if (activeTickets.length === 0) {
+      container.innerHTML = '<div class="empty-cart">No unpaid tickets.</div>';
+      return;
+    }
+
+    container.innerHTML = '';
+    activeTickets.forEach(ticket => {
+      const itemsStr = ticket.items.map(i => `${i.quantity}x ${i.item_name}`).join('<br>');
+      
+      const card = document.createElement('div');
+      card.className = 'ticket-card';
+      card.innerHTML = `
+        <button class="delete-btn" onclick="deleteTicket(${ticket.id})">Cancel</button>
+        <h4>${ticket.customer_name}</h4>
+        <div class="ticket-meta">${ticket.customer_phone} | ${ticket.delivery_spot}<br>${ticket.time_slot}</div>
+        <div class="ticket-items">${itemsStr}</div>
+        <div class="ticket-total">Total: Rs. ${ticket.total}</div>
+        <button class="pay-btn" id="pay-btn-${ticket.id}" onclick="payTicket(${ticket.id})">Mark as Paid</button>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  function deleteTicket(ticketId) {
+    if(confirm("Are you sure you want to cancel this unpaid ticket?")) {
+      activeTickets = activeTickets.filter(t => t.id !== ticketId);
+      renderActiveTickets();
+    }
+  }
+
+  async function payTicket(ticketId) {
+    const ticket = activeTickets.find(t => t.id === ticketId);
+    if (!ticket) return;
+
+    const btn = document.getElementById(`pay-btn-${ticketId}`);
+    btn.disabled = true;
+    btn.innerText = "Processing...";
+
+    const payload = {
+      customer_name: ticket.customer_name,
+      customer_phone: ticket.customer_phone,
+      delivery_spot: ticket.delivery_spot,
+      time_slot: ticket.time_slot,
+      items: ticket.items
+    };
+
+    try {
+      // Officially send to backend DB
+      const res = await fetch(`${API_BASE}/orders/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!res.ok) throw new Error("Failed to process payment");
+      
+      const order = await res.json();
+      
+      // Remove from active tickets since it's now paid and in DB
+      activeTickets = activeTickets.filter(t => t.id !== ticketId);
+      renderActiveTickets();
+
+      // Show success popup with real DB Order ID
+      document.getElementById('modal-order-id').innerText = `Order #${order.daily_number}`;
+      document.getElementById('modal-total').innerText = `Rs. ${order.total}`;
+      document.getElementById('success-modal').classList.add('active');
+
+    } catch (err) {
+      alert(err.message);
+      btn.disabled = false;
+      btn.innerText = "Mark as Paid";
+    }
+  }
+
+  function closeModal() {
+    document.getElementById('success-modal').classList.remove('active');
+  }
+
+
+  // --- DASHBOARD LOGIC ---
+
+  function getQueryString() {
+    const d = document.getElementById('date-picker').value;
+    const ts = document.getElementById('filter-time-slot').value;
+    let qs = "?";
+    if (d) qs += `order_date=${d}&`;
+    if (ts) qs += `time_slot=${encodeURIComponent(ts)}&`;
+    return qs;
+  }
+
+  async function fetchDashboardData() {
+    const qs = getQueryString();
+    
+    // Fetch Summary
+    try {
+      const sumRes = await fetch(`${API_BASE}/orders/summary/daily${qs}`);
+      if (sumRes.ok) {
+        const summary = await sumRes.json();
+        document.getElementById('sum-orders').innerText = summary.total_orders;
+        document.getElementById('sum-subtotal').innerText = `Rs. ${summary.total_subtotal}`;
+        document.getElementById('sum-delivery').innerText = `Rs. ${summary.total_delivery_charges}`;
+        document.getElementById('sum-total').innerText = `Rs. ${summary.total_revenue}`;
+      }
+    } catch (e) { console.error("Summary error", e); }
+
+    // Fetch Table
+    try {
+      const tBody = document.getElementById('orders-table-body');
+      tBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Loading...</td></tr>';
+      
+      const ordRes = await fetch(`${API_BASE}/orders/${qs}`);
+      if (ordRes.ok) {
+        const orders = await ordRes.json();
+        currentOrders = orders;
+        if (orders.length === 0) {
+          tBody.innerHTML = '<tr><td colspan="7" style="text-align:center; color:var(--muted);">No orders found for this selection.</td></tr>';
+          return;
+        }
+
+        tBody.innerHTML = '';
+        orders.forEach((o, idx) => {
+          const itemsStr = o.items.map(i => `${i.item_name} x${i.quantity}`).join(', ');
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td><strong>#${o.daily_number}</strong></td>
+            <td>${o.customer_name}<br><span style="font-size:11px; color:var(--muted);">${o.customer_phone}</span></td>
+            <td>${o.delivery_spot}</td>
+            <td>${o.time_slot}</td>
+            <td style="max-width: 250px;">${itemsStr}</td>
+            <td><strong>Rs. ${o.total}</strong></td>
+            <td style="white-space:nowrap;">
+              <button class="refresh-btn" onclick="openEditModal(${idx})">Edit</button>
+              <button class="refresh-btn" style="color:#c0392b;" onclick="deleteOrder('${o.order_date}', ${o.daily_number})">Delete</button>
+            </td>
+          `;
+          tBody.appendChild(tr);
+        });
+      }
+    } catch (e) { console.error("Orders error", e); }
+  }
+
+  function downloadPDF(type) {
+    const url = `${API_BASE}/orders/export/${type}${getQueryString()}`;
+    window.open(url, '_blank');
+  }
+
+  // --- EDIT / DELETE ORDER (Daily Records tab) ---
+
+  function openEditModal(index) {
+    const order = currentOrders[index];
+    if (!order) return;
+    editingOrder = { order_date: order.order_date, daily_number: order.daily_number };
+
+    document.getElementById('edit-order-num').innerText = order.daily_number;
+    document.getElementById('edit-name').value = order.customer_name;
+    document.getElementById('edit-phone').value = order.customer_phone;
+    document.getElementById('edit-spot').value = order.delivery_spot;
+    document.getElementById('edit-timeslot').value = order.time_slot;
+
+    editCart = order.items.map((it, i) => ({
+      key: `${it.item_name}-${i}`,
+      name: it.item_name,
+      price: it.price,
+      quantity: it.quantity
+    }));
+
+    renderEditItems();
+    populateEditAddItemSelect();
+    document.getElementById('edit-modal').classList.add('active');
+  }
+
+  function closeEditModal() {
+    document.getElementById('edit-modal').classList.remove('active');
+    editingOrder = null;
+  }
+
+  function renderEditItems() {
+    const container = document.getElementById('edit-items-list');
+    if (editCart.length === 0) {
+      container.innerHTML = '<div class="empty-cart">No items — add one below.</div>';
+      return;
+    }
+    container.innerHTML = editCart.map(it => `
+      <div class="cart-item">
+        <span>${it.name}</span>
+        <div class="qty-controls">
+          <button onclick="changeEditQty('${it.key}', -1)">-</button>
+          <span style="width:20px; text-align:center;">${it.quantity}</span>
+          <button onclick="changeEditQty('${it.key}', 1)">+</button>
+          <span style="width:60px; text-align:right;">Rs. ${it.price * it.quantity}</span>
+          <button onclick="removeEditItem('${it.key}')">✕</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function changeEditQty(key, delta) {
+    const it = editCart.find(x => x.key === key);
+    if (!it) return;
+    it.quantity += delta;
+    if (it.quantity <= 0) editCart = editCart.filter(x => x.key !== key);
+    renderEditItems();
+  }
+
+  function removeEditItem(key) {
+    editCart = editCart.filter(x => x.key !== key);
+    renderEditItems();
+  }
+
+  function populateEditAddItemSelect() {
+    const select = document.getElementById('edit-add-item-select');
+    const options = [];
+    loadedMenu.forEach(category => {
+      category.items.forEach(item => {
+        item.variants.forEach(v => {
+          const displayName = v.label === "Regular" ? item.name : `${item.name} (${v.label})`;
+          options.push(`<option value='${JSON.stringify({ name: displayName, price: v.price })}'>${displayName} - Rs.${v.price}</option>`);
+        });
+      });
+    });
+    select.innerHTML = options.join('');
+  }
+
+  function addEditItem() {
+    const select = document.getElementById('edit-add-item-select');
+    if (!select.value) return;
+    const chosen = JSON.parse(select.value);
+    const existing = editCart.find(c => c.name === chosen.name);
+    if (existing) {
+      existing.quantity += 1;
+    } else {
+      editCart.push({ key: chosen.name, name: chosen.name, price: chosen.price, quantity: 1 });
+    }
+    renderEditItems();
+  }
+
+  async function saveEditOrder() {
+    if (!editingOrder) return;
+    const name = document.getElementById('edit-name').value.trim();
+    const phone = document.getElementById('edit-phone').value.trim();
+    const spot = document.getElementById('edit-spot').value;
+    const timeSlot = document.getElementById('edit-timeslot').value;
+
+    if (!name || phone.length !== 10) {
+      alert('Please enter a valid customer name and a 10-digit phone number.');
+      return;
+    }
+    if (editCart.length === 0) {
+      alert('Order must have at least one item.');
+      return;
+    }
+
+    const payload = {
+      customer_name: name,
+      customer_phone: phone,
+      delivery_spot: spot,
+      time_slot: timeSlot,
+      items: editCart.map(c => ({ item_name: c.name, quantity: c.quantity, price: c.price }))
+    };
+
+    try {
+      const res = await fetch(`${API_BASE}/orders/${editingOrder.order_date}/${editingOrder.daily_number}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error('Update failed');
+      closeEditModal();
+      fetchDashboardData();
+    } catch (err) {
+      alert('Could not save changes. Check the backend connection.');
+    }
+  }
+
+  async function deleteOrder(orderDate, dailyNumber) {
+    if (!confirm(`Delete order #${dailyNumber} on ${orderDate}? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`${API_BASE}/orders/${orderDate}/${dailyNumber}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
+      fetchDashboardData();
+    } catch (err) {
+      alert('Could not delete order. Check the backend connection.');
+    }
+  }
+
+</script>
+</body>
+</html>

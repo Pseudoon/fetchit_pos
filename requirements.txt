@@ -1,0 +1,5 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+reportlab
+psycopg2-binary
