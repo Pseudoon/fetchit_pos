@@ -7,10 +7,17 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 # for running on your own machine. No code change needed between the two.
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./fetchit.db")
 
-# Render/Railway sometimes hand out URLs starting with postgres:// — SQLAlchemy
+# Render/Railway/Neon sometimes hand out URLs starting with postgres:// — SQLAlchemy
 # needs postgresql:// instead.
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+# Explicitly pin the driver to psycopg2 (matches psycopg2-binary in requirements.txt).
+# Without this, newer SQLAlchemy versions can default to the psycopg (v3) driver
+# instead, which isn't installed, and the app crashes on startup with
+# "ModuleNotFoundError: No module named 'psycopg'".
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, connect_args=connect_args)
